@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "name": "coucou",
+  "version": "1.0.1",
+  "name": "hello",
   "description": "Version initiale pour ESP32 OTA",
   "date": "2025-04-30"
 }
