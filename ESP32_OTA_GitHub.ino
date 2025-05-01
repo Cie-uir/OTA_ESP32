@@ -18,8 +18,8 @@ const String FIRMWARE_VERSION = "1.0.0";  // Format: majeur.mineur.patch
 const String FIRMWARE_NAME = "coucou";    // Nom du firmware pour l'identification
 
 // Liens GitHub - À MODIFIER avec vos liens "raw"
-const String VERSION_JSON_URL = "https://raw.githubusercontent.com/VOTRE-USERNAME/OTA_ESP32/main/version.json";
-const String FIRMWARE_BIN_URL = "https://raw.githubusercontent.com/VOTRE-USERNAME/OTA_ESP32/main/firmware.bin";
+const String VERSION_JSON_URL = "https://raw.githubusercontent.com/Cie-uir/OTA_ESP32/main/version.json";
+const String FIRMWARE_BIN_URL = "https://raw.githubusercontent.com/Cie-uir/OTA_ESP32/main/firmware.bin";
 
 // Structure pour stocker les configurations WiFi
 struct WiFiConfig {
