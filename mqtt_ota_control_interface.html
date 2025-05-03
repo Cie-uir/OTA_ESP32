@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 OTA via MQTT</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #0066cc;
+            margin-top: 0;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 5px;
+        }
+        button:hover {
+            background-color: #004c99;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        input, select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f5f5f5;
+            min-height: 100px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .status-message {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #0066cc;
+        }
+        .status-message.error {
+            border-left-color: #cc0000;
+        }
+        .status-message.success {
+            border-left-color: #00cc00;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab.active {
+            background-color: #0066cc;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .help {
+            font-size: 12px;
+            color: #666;
+            margin-top: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Interface de contrôle OTA ESP32 via MQTT</h1>
+    
+    <div class="card">
+        <h2>Configuration MQTT</h2>
+        <div>
+            <label for="broker">Broker MQTT:</label>
+            <input type="text" id="broker" value="broker.emqx.io">
+            <div class="help">Broker MQTT public (emqx.io)</div>
+        </div>
+        <div>
+            <label for="port">Port:</label>
+            <input type="number" id="port" value="8084">
+            <div class="help">8084 pour WebSocket sécurisé (WSS)</div>
+        </div>
+        <div>
+            <label for="clientId">ID Client:</label>
+            <input type="text" id="clientId" value="web_controller_">
+            <div class="help">Un identifiant unique sera ajouté automatiquement</div>
+        </div>
+        <div>
+            <label for="deviceId">ID de l'ESP32:</label>
+            <input type="text" id="deviceId" value="esp32_01">
+            <div class="help">Identifiant unique de votre ESP32 (utilisé dans les topics)</div>
+        </div>
+        <div style="margin-top: 15px;">
+            <button id="connectBtn">Se connecter</button>
+            <button id="disconnectBtn" disabled>Se déconnecter</button>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" data-tab="control">Contrôle</div>
+        <div class="tab" data-tab="github">Configuration GitHub</div>
+        <div class="tab" data-tab="tools">Outils</div>
+    </div>
+
+    <div id="control" class="tab-content active card">
+        <h2>Commandes de mise à jour</h2>
+        <div>
+            <button id="checkUpdateBtn" disabled>Vérifier les mises à jour</button>
+            <button id="forceUpdateBtn" disabled>Forcer la mise à jour</button>
+            <button id="restartBtn" disabled>Redémarrer l'ESP32</button>
+        </div>
+        <div style="margin-top: 20px;">
+            <label for="customCommand">Commande personnalisée:</label>
+            <input type="text" id="customCommand" placeholder="Exemple: add_wifi:SSID:PASSWORD">
+            <button id="sendCustomBtn" disabled>Envoyer</button>
+        </div>
+    </div>
+
+    <div id="github" class="tab-content card">
+        <h2>Configuration des URLs GitHub</h2>
+        <div>
+            <label for="githubUser">Utilisateur/Organisation GitHub:</label>
+            <input type="text" id="githubUser" value="Cie-uir">
+        </div>
+        <div>
+            <label for="githubRepo">Nom du repository:</label>
+            <input type="text" id="githubRepo" value="OTA_ESP32">
+        </div>
+        <div>
+            <label for="githubBranch">Branche:</label>
+            <input type="text" id="githubBranch" value="main">
+        </div>
+        <div>
+            <label for="versionFile">Nom du fichier version:</label>
+            <input type="text" id="versionFile" value="version.json">
+        </div>
+        <div>
+            <label for="firmwareFile">Nom du fichier firmware:</label>
+            <input type="text" id="firmwareFile" value="firmware.bin">
+        </div>
+        <div>
+            <button id="updateGithubBtn">Mettre à jour les URLs</button>
+        </div>
+        <div style="margin-top: 15px;">
+            <div>URLs générées:</div>
+            <input type="text" id="versionUrl" readonly>
+            <input type="text" id="firmwareUrl" readonly>
+        </div>
+    </div>
+
+    <div id="tools" class="tab-content card">
+        <h2>Outils</h2>
+        <div>
+            <label for="wifiSsid">SSID WiFi:</label>
+            <input type="text" id="wifiSsid" placeholder="Nom du réseau WiFi">
+        </div>
+        <div>
+            <label for="wifiPassword">Mot de passe WiFi:</label>
+            <input type="password" id="wifiPassword" placeholder="Mot de passe">
+        </div>
+        <div>
+            <button id="addWifiBtn" disabled>Ajouter ce réseau WiFi</button>
+        </div>
+        <div style="margin-top: 20px;">
+            <button id="listWifiBtn" disabled>Lister les réseaux WiFi</button>
+            <button id="clearWifiBtn" disabled>Effacer les réseaux WiFi</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Statut et Messages</h2>
+        <div class="status" id="status">
+            <div class="status-message">Prêt. Connectez-vous au broker MQTT pour commencer.</div>
+        </div>
+    </div>
+
+    <script>
+        // Générer un identifiant client unique
+        document.getElementById('clientId').value += Math.random().toString(16).substr(2, 8);
+        
+        // Initialiser les variables
+        let mqtt;
+        let isConnected = false;
+        let deviceTopic = "";
+        
+        // Sélecteurs d'éléments fréquemment utilisés
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const checkUpdateBtn = document.getElementById('checkUpdateBtn');
+        const forceUpdateBtn = document.getElementById('forceUpdateBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const sendCustomBtn = document.getElementById('sendCustomBtn');
+        const addWifiBtn = document.getElementById('addWifiBtn');
+        const listWifiBtn = document.getElementById('listWifiBtn');
+        const clearWifiBtn = document.getElementById('clearWifiBtn');
+        const statusDiv = document.getElementById('status');
+        
+        // Gestionnaire d'onglets
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+        
+        // Mise à jour des URLs GitHub
+        function updateGithubUrls() {
+            const user = document.getElementById('githubUser').value;
+            const repo = document.getElementById('githubRepo').value;
+            const branch = document.getElementById('githubBranch').value;
+            const versionFile = document.getElementById('versionFile').value;
+            const firmwareFile = document.getElementById('firmwareFile').value;
+            
+            const baseUrl = `https://raw.githubusercontent.com/${user}/${repo}/${branch}/`;
+            document.getElementById('versionUrl').value = baseUrl + versionFile;
+            document.getElementById('firmwareUrl').value = baseUrl + firmwareFile;
+            
+            addStatusMessage("URLs GitHub mises à jour.");
+        }
+        
+        document.getElementById('updateGithubBtn').addEventListener('click', updateGithubUrls);
+        
+        // Appeler updateGithubUrls au chargement
+        updateGithubUrls();
+        
+        // Fonction pour ajouter un message de statut
+        function addStatusMessage(message, type = 'info') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `status-message ${type}`;
+            messageDiv.textContent = message;
+            statusDiv.appendChild(messageDiv);
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        }
+        
+        // Connexion au broker MQTT
+        connectBtn.addEventListener('click', () => {
+            const broker = document.getElementById('broker').value;
+            const port = parseInt(document.getElementById('port').value);
+            const clientId = document.getElementById('clientId').value;
+            const deviceId = document.getElementById('deviceId').value;
+            
+            // Définir les topics
+            deviceTopic = `esp32/${deviceId}/command`;
+            
+            // Initialiser le client MQTT
+            mqtt = new Paho.MQTT.Client(broker, port, clientId);
+            
+            // Définir les callbacks
+            mqtt.onConnectionLost = onConnectionLost;
+            mqtt.onMessageArrived = onMessageArrived;
+            
+            // Options de connexion
+            const options = {
+                useSSL: port === 8883 || port === 8084 || port === 8083,
+                timeout: 3,
+                onSuccess: onConnect,
+                onFailure: onConnectFailure
+            };
+            
+            // Se connecter
+            addStatusMessage(`Connexion au broker ${broker}:${port}...`);
+            mqtt.connect(options);
+        });
+        
+        // Déconnexion du broker MQTT
+        disconnectBtn.addEventListener('click', () => {
+            if (mqtt && isConnected) {
+                mqtt.disconnect();
+                isConnected = false;
+                updateUIConnected(false);
+                addStatusMessage("Déconnecté du broker MQTT.");
+            }
+        });
+        
+        // Événement de connexion réussie
+        function onConnect() {
+            isConnected = true;
+            updateUIConnected(true);
+            addStatusMessage("Connecté au broker MQTT!", "success");
+            
+            // S'abonner au topic de statut de l'ESP32
+            const statusTopic = `esp32/${document.getElementById('deviceId').value}/status`;
+            mqtt.subscribe(statusTopic);
+            addStatusMessage(`Abonné au topic: ${statusTopic}`);
+        }
+        
+        // Événement d'échec de connexion
+        function onConnectFailure(responseObject) {
+            isConnected = false;
+            updateUIConnected(false);
+            addStatusMessage(`Échec de connexion: ${responseObject.errorMessage}`, "error");
+        }
+        
+        // Événement de perte de connexion
+        function onConnectionLost(responseObject) {
+            isConnected = false;
+            updateUIConnected(false);
+            if (responseObject.errorCode !== 0) {
+                addStatusMessage(`Connexion perdue: ${responseObject.errorMessage}`, "error");
+            }
+        }
+        
+        // Événement de réception de message
+        function onMessageArrived(message) {
+            addStatusMessage(`Message reçu [${message.destinationName}]: ${message.payloadString}`);
+        }
+        
+        // Mise à jour de l'interface selon l'état de connexion
+        function updateUIConnected(connected) {
+            connectBtn.disabled = connected;
+            disconnectBtn.disabled = !connected;
+            checkUpdateBtn.disabled = !connected;
+            forceUpdateBtn.disabled = !connected;
+            restartBtn.disabled = !connected;
+            sendCustomBtn.disabled = !connected;
+            addWifiBtn.disabled = !connected;
+            listWifiBtn.disabled = !connected;
+            clearWifiBtn.disabled = !connected;
+        }
+        
+        // Envoi d'une commande à l'ESP32
+        function sendCommand(command) {
+            if (!isConnected) {
+                addStatusMessage("Non connecté au broker MQTT!", "error");
+                return;
+            }
+            
+            const message = new Paho.MQTT.Message(command);
+            message.destinationName = deviceTopic;
+            mqtt.send(message);
+            addStatusMessage(`Commande envoyée [${deviceTopic}]: ${command}`);
+        }
+        
+        // Gestionnaires d'événements pour les boutons
+        checkUpdateBtn.addEventListener('click', () => {
+            sendCommand("check_update");
+        });
+        
+        forceUpdateBtn.addEventListener('click', () => {
+            // Envoi des URLs pour la mise à jour forcée
+            const versionUrl = document.getElementById('versionUrl').value;
+            const firmwareUrl = document.getElementById('firmwareUrl').value;
+            const command = `force_update:${versionUrl}:${firmwareUrl}`;
+            sendCommand(command);
+        });
+        
+        restartBtn.addEventListener('click', () => {
+            if (confirm("Êtes-vous sûr de vouloir redémarrer l'ESP32?")) {
+                sendCommand("restart");
+            }
+        });
+        
+        sendCustomBtn.addEventListener('click', () => {
+            const command = document.getElementById('customCommand').value.trim();
+            if (command) {
+                sendCommand(command);
+            }
+        });
+        
+        addWifiBtn.addEventListener('click', () => {
+            const ssid = document.getElementById('wifiSsid').value.trim();
+            const password = document.getElementById('wifiPassword').value.trim();
+            
+            if (ssid && password) {
+                const command = `add_wifi:${ssid}:${password}`;
+                sendCommand(command);
+            } else {
+                addStatusMessage("SSID et mot de passe requis!", "error");
+            }
+        });
+        
+        listWifiBtn.addEventListener('click', () => {
+            sendCommand("list_wifi");
+        });
+        
+        clearWifiBtn.addEventListener('click', () => {
+            if (confirm("Êtes-vous sûr de vouloir effacer toutes les configurations WiFi?")) {
+                sendCommand("clear_wifi");
+            }
+        });
+    </script>
+</body>
+</html>
